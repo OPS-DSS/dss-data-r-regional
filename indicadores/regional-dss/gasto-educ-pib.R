@@ -45,20 +45,20 @@ process_gasto_educ_pib <- function(output_dir = here("outputs")) {
     filter(continent == "Americas")
 
   # Dashboard contract:
-  # iso3, Territorio, cod_local, anio, valor.
+  # iso3, territorio, cod_local, anio, valor.
   # At regional level each country is a territory; cod_local does not apply.
   educ_PIB <- educ_PIB |>
     inner_join(codigos_paises, by = c("iso3" = "iso3c")) |>
     transmute(
       iso3,
-      Territorio = country.name.es,
+      territorio = country.name.es,
       cod_local = NA_character_,
       anio,
       valor
     ) |>
     filter(!is.na(anio), !is.na(valor)) |>
     arrange(
-      Territorio,
+      territorio,
       anio
     )
 
