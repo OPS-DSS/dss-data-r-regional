@@ -12,6 +12,9 @@ library(readr)
 library(arrow)
 library(fs)
 library(purrr)
+library(sf)
+library(RColorBrewer)
+library(rnaturalearth)
 
 MIN_COUNTRIES <- 10L
 
@@ -131,6 +134,120 @@ process_regional_analytics <- function(
   write_parquet(scatter, files[["scatter_parquet"]])
   write_csv(trends, files[["trends_csv"]])
   write_parquet(trends, files[["trends_parquet"]])
+
+
+  # ── Regional GeoJSONs for PAM-DSS analytical maps ──────────────────────────
+  geojson_dir <- file.path(output_dir, "geojson")
+  dir_create(geojson_dir)
+
+  # Same spatial workflow used by the SMV analytics: sf geometry + st_write().
+  # Natural Earth supplies the base country polygons; ISO3 is the stable join key.
+  americas_sf <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf") |>
+    filter(continent %in% c("North America", "South America")) |>
+    transmute(
+      iso3 = as.character(iso_a3),
+      territorio = as.character(name_long),
+      geometry
+    ) |>
+    filter(iso3 != "-99") |>
+    sf::st_make_valid()
+
+  ylord <- RColorBrewer::brewer.pal(5, "YlOrRd")
+  bivariate_colors <- matrix(c(
+    "#e8e8e8", "#ace4e4", "#5ac8c8",
+    "#dfb0d6", "#a5b8c5", "#5a9ab5",
+    "#be64ac", "#8c62aa", "#3b4994"
+  ), nrow = 3, byrow = TRUE)
+
+  classify_tercile <- function(x) {
+    out <- rep(NA_integer_, length(x))
+    ok <- is.finite(x)
+    if (sum(ok) < 2L || length(unique(x[ok])) < 2L) return(out)
+    r <- rank(x[ok], ties.method = "average")
+    out[ok] <- pmin(2L, floor((r - 1) * 3 / length(r)))
+    out
+  }
+
+  sequential_colors <- function(x) {
+    out <- rep("#CCCCCC", length(x))
+    ok <- is.finite(x)
+    if (!any(ok)) return(out)
+    if (length(unique(x[ok])) < 2L) {
+      out[ok] <- ylord[3L]
+      return(out)
+    }
+    cls <- pmin(5L, pmax(1L, ceiling(rank(x[ok], ties.method = "average") * 5 / sum(ok))))
+    out[ok] <- ylord[cls]
+    out
+  }
+
+  write_single_map <- function(slug, rows) {
+    for (yr in sort(unique(rows$anio))) {
+      values <- rows |>
+        filter(anio == yr) |>
+        distinct(iso3, .keep_all = TRUE) |>
+        select(iso3, value = valor)
+      out <- americas_sf |>
+        left_join(values, by = "iso3") |>
+        mutate(color = sequential_colors(value)) |>
+        select(iso3, territorio, value, color, geometry)
+      sf::st_write(
+        out,
+        file.path(geojson_dir, paste0(slug, "-", yr, ".geojson")),
+        driver = "GeoJSON", delete_dsn = TRUE, quiet = TRUE
+      )
+    }
+  }
+
+  walk(priority_slugs, ~ write_single_map(.x, indicators[[.x]]))
+  walk(dss_slugs, ~ write_single_map(.x, indicators[[.x]]))
+
+  # Bivariate ODS-health x DSS maps. Classification is calculated in R.
+  crossing(priorizado = priority_slugs, dss = dss_slugs) |>
+    pwalk(function(priorizado, dss) {
+      pair_rows <- scatter |>
+        filter(.data$priorizado == priorizado, .data$dss == dss)
+      for (yr in sort(unique(pair_rows$anio))) {
+        values <- pair_rows |>
+          filter(anio == yr) |>
+          distinct(iso3, .keep_all = TRUE) |>
+          mutate(
+            health_class = classify_tercile(valor_salud),
+            dss_class = classify_tercile(valor_dss),
+            color = map2_chr(health_class, dss_class, function(hc, dc) {
+              if (is.na(hc) || is.na(dc)) "#CCCCCC"
+              else bivariate_colors[hc + 1L, dc + 1L]
+            })
+          ) |>
+          select(
+            iso3,
+            value = valor_dss,
+            health_value = valor_salud,
+            health_class,
+            dss_class,
+            color
+          )
+
+        out <- americas_sf |>
+          left_join(values, by = "iso3") |>
+          mutate(color = coalesce(color, "#CCCCCC")) |>
+          select(
+            iso3, territorio, value, health_value,
+            health_class, dss_class, color, geometry
+          )
+
+        sf::st_write(
+          out,
+          file.path(
+            geojson_dir,
+            paste0("bivariate-", priorizado, "-", dss, "-", yr, ".geojson")
+          ),
+          driver = "GeoJSON", delete_dsn = TRUE, quiet = TRUE
+        )
+      }
+    })
+
+  message("Regional GeoJSON maps saved.")
 
   message("Regional analytics saved: correlations, scatter and trends.")
   invisible(list(
