@@ -46,20 +46,20 @@ process_razon_mortalidad_materna <- function(output_dir = here("outputs")) {
     filter(continent == "Americas")
 
   # Dashboard contract:
-  # iso3, Territorio, cod_local, anio, valor.
+  # iso3, territorio, cod_local, anio, valor.
   # At regional level each country is a territory; cod_local does not apply.
   mortalidad_materna <- mortalidad_materna |>
     inner_join(codigos_paises, by = c("country" = "country.name.en")) |>
     transmute(
       iso3 = iso3c,
-      Territorio = country.name.es,
+      territorio = country.name.es,
       cod_local = NA_character_,
       anio,
       valor
     ) |>
     filter(!is.na(anio), !is.na(valor)) |>
     arrange(
-      Territorio,
+      territorio,
       anio
     )
 
