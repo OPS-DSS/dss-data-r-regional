@@ -17,7 +17,8 @@ library(readr)
 library(fs)
 library(glue)
 library(httr)
-library(countrycode) #country.name.es country.name.en country.name.pt iso3c continent
+library(countrycode) # country.name.es country.name.en country.name.pt iso3c continent
+
 source(here("herramientas/descargas/ods.R"))
 
 codigo_indicador <- "SH_STA_MORT"
@@ -27,14 +28,11 @@ mortalidad_materna_raw <- descargar_un_ods(
 )
 
 mortalidad_materna <- mortalidad_materna_raw |>
-  
   transmute(
     country = geoAreaName,
     anio = as.integer(timePeriodStart),
-    valor = as.numeric(value),
-    indicador =
-      "Razón de mortalidad materna"
-  ) 
+    valor = as.numeric(value)
+  )
 
 codigos_paises <- codelist |>
   select(
@@ -43,22 +41,23 @@ codigos_paises <- codelist |>
     iso3c,
     continent,
     region
-  )|>
-  filter(continent=="Americas")
+  ) |>
+  filter(continent == "Americas")
 
-
+# Dashboard contract:
+# iso3, Territorio, cod_local, anio, valor.
+# At regional level each country is a territory; cod_local does not apply.
 mortalidad_materna <- mortalidad_materna |>
-  inner_join(codigos_paises,by=c("country"="country.name.en"))|>
-  mutate(pais=country.name.es,iso3=iso3c)|>
-  select(
-    pais,
-    iso3,
-    indicador,
+  inner_join(codigos_paises, by = c("country" = "country.name.en")) |>
+  transmute(
+    iso3 = iso3c,
+    Territorio = country.name.es,
+    cod_local = NA_character_,
     anio,
     valor
   ) |>
-  
+  filter(!is.na(anio), !is.na(valor)) |>
   arrange(
-    pais,
+    Territorio,
     anio
   )
