@@ -16,6 +16,7 @@ library(arrow)
 library(readr)
 library(fs)
 library(glue)
+library(countrycode) # country.name.es country.name.en country.name.pt iso3c continent
 
 source(here("herramientas/descargas/banco-mundial.R"))
 
@@ -81,7 +82,8 @@ process_gasto_educ_pib <- function(output_dir = here("outputs")) {
   ))
 }
 
-if (!interactive()) {
+#if (!interactive()) {
   result <- process_gasto_educ_pib()
-  cat("✅ Education expenditure processing completed.\n")
-}
+#  cat("✅ Education expenditure processing completed.\n")
+#}
+

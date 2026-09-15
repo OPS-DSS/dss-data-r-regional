@@ -83,7 +83,7 @@ process_razon_mortalidad_materna <- function(output_dir = here("outputs")) {
   ))
 }
 
-if (!interactive()) {
+#if (!interactive()) {
   result <- process_razon_mortalidad_materna()
-  cat("✅ Maternal mortality processing completed.\n")
-}
+ # cat("✅ Maternal mortality processing completed.\n")
+#}
