@@ -44,7 +44,16 @@ spearman_summary <- function(x, y) {
 }
 
 read_regional_indicator <- function(path, slug) {
-  read_parquet(path) |>
+  data <- read_parquet(path)
+
+  # Advanced Analytics always uses the total population.
+  # Stratified rows remain available in the source parquet for DSS charts.
+  if ("sexo" %in% names(data)) {
+    data <- data |>
+      filter(sexo == "Total")
+  }
+
+  data |>
     transmute(
       iso3 = as.character(iso3),
       territorio = as.character(territorio),
@@ -52,13 +61,21 @@ read_regional_indicator <- function(path, slug) {
       valor = as.numeric(valor),
       slug = slug
     ) |>
-    filter(!is.na(iso3), !is.na(anio), is.finite(valor))
+    filter(!is.na(iso3), !is.na(anio), is.finite(valor)) |>
+    distinct(iso3, anio, .keep_all = TRUE)
 }
 
 process_regional_analytics <- function(
     output_dir = here("outputs"),
-    priority_slugs = c("razon-mortalidad-materna"),
-    dss_slugs = c("gasto-educ-pib")) {
+    priority_slugs = c(
+      "razon-mortalidad-materna",
+      "tuberculosis"
+    ),
+    dss_slugs = c(
+      "gasto-educ-pib",
+      "uso-internet",
+      "gini"
+    )) {
 
   parquet_dir <- file.path(output_dir, "parquet")
   csv_dir <- file.path(output_dir, "csv")
