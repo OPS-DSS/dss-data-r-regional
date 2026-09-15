@@ -141,6 +141,6 @@ process_regional_analytics <- function(
   ))
 }
 
-if (!interactive()) {
+#if (!interactive()) {
   process_regional_analytics()
-}
+#}
